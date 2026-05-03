@@ -5,36 +5,51 @@ import requests
 from io import BytesIO
 from PIL import Image
 
-st.set_page_config(page_title="BHB – Fiches Joueurs", page_icon="🤾", layout="centered")
+st.set_page_config(page_title="BHB – Fiches Joueurs", page_icon="🤾", layout="wide")
 
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
   html, body, [class*="css"] { font-family: 'Inter', sans-serif; }
+
+  /* Réduction marges globales Streamlit */
+  .block-container { padding: 0.8rem 1.2rem 0.5rem !important; max-width: 1100px; }
+  div[data-testid="stVerticalBlock"] > div { gap: 0.3rem !important; }
+
   .stat-card {
-    background: #f0f4fa; border-left: 4px solid #1F4E79;
-    border-radius: 10px; padding: 16px 20px 10px; margin-bottom: 18px;
+    background: #f0f4fa; border-left: 3px solid #1F4E79;
+    border-radius: 8px; padding: 10px 14px 8px; margin-bottom: 8px;
   }
   .stat-card h3 {
-    margin: 0 0 14px 0; font-size: 0.82rem; text-transform: uppercase;
+    margin: 0 0 8px 0; font-size: 0.72rem; text-transform: uppercase;
     letter-spacing: 1px; color: #1F4E79; font-weight: 700;
   }
-  .kpi-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  .kpi-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .kpi {
-    background: white; border-radius: 8px; padding: 10px 16px;
-    text-align: center; flex: 1; min-width: 80px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    background: white; border-radius: 6px; padding: 6px 12px;
+    text-align: center; flex: 1; min-width: 70px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.07);
   }
-  .kpi .val { font-size: 1.75rem; font-weight: 700; color: #1a2e4a; line-height: 1.1; }
-  .kpi .lbl { font-size: 0.7rem; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 3px; }
+  .kpi .val { font-size: 1.4rem; font-weight: 700; color: #1a2e4a; line-height: 1.1; }
+  .kpi .lbl { font-size: 0.62rem; color: #777; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 2px; }
   .kpi.green .val  { color: #1a7a3c; }
   .kpi.orange .val { color: #b85e00; }
   .kpi.red .val    { color: #c0392b; }
+
+  .player-name { font-size: 1.35rem; font-weight: 700; color: #1a2e4a; line-height: 1.15; margin: 0; }
+  .player-poste { font-size: 0.8rem; color: #1F4E79; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+  .player-num { font-size: 0.72rem; color: #999; text-transform: uppercase; letter-spacing: 1px; }
+
   .match-badge {
     display: inline-block; background: #e8f0fb; color: #1F4E79;
-    border-radius: 6px; padding: 2px 10px; font-size: 0.78rem;
-    font-weight: 600; margin-bottom: 10px;
+    border-radius: 5px; padding: 1px 8px; font-size: 0.72rem;
+    font-weight: 600; margin-bottom: 6px;
   }
+  hr.divider { border: none; border-top: 2px solid #1F4E79; margin: 8px 0 10px; }
+
+  /* Réduire hauteur des selectbox et widgets */
+  div[data-testid="stSelectbox"] { margin-bottom: 4px !important; }
+  div[data-testid="stMultiSelect"] { margin-bottom: 4px !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -45,6 +60,8 @@ GARDIENS    = {12, 16}
 C = {"primary": "#1F4E79", "accent": "#4A90D9", "green": "#1a7a3c",
      "orange": "#d97706", "red": "#c0392b", "bg": "#f0f4fa"}
 
+JOURNEE_ORDER = [f"J{i}" for i in range(1, 23)]
+
 REF_JOUEURS = pd.DataFrame({
     'Numéro': [2,3,4,5,7,8,9,10,12,13,15,16,19,21,24,25,33,92],
     'Nom':    ['NAUDIN','NAUDIN','HERMAND','BON','PLISSONNIER','PANIC','MINANA',
@@ -53,10 +70,6 @@ REF_JOUEURS = pd.DataFrame({
     'Prénom': ['Paul','Théo','Mathieu','Gabriel','Jean','Milan','Lilian','Vincent',
                'Corentin','Axel','Lubin','François','Sasha','Marius','Gabin',
                'Léan','Hugo','Kylian'],
-    'Joueur': ['2 NAUDIN P.','3 NAUDIN T.','4 HERMAND','5 BON','7 PLISSONNIER',
-               '8 PANIC','9 MINANA','10 GREGULSKI V.','12 STEPHAN','13 THELCIDE',
-               '15 COSNIER','16 MAI','19 GOSTOMSKI','21 CHAZALON','24 MINY',
-               '25 FAVERIN','33 NAUDIN H.','92 PHAROSE'],
     'Poste':  ['DEMI-CENTRE','AILIER','PIVOT','ARRIERE','AILIER','ARRIERE','ARRIERE',
                'ARRIERE','GARDIEN','ARRIERE','DEMI-CENTRE','GARDIEN','PIVOT',
                'ARRIERE','PIVOT','AILIER','ARRIERE','AILIER'],
@@ -67,23 +80,20 @@ REF_JOUEURS = pd.DataFrame({
 def load_data():
     resp = requests.get(DATA_URL, timeout=20)
     resp.raise_for_status()
-    buf = BytesIO(resp.content)
-    # engine='openpyxl' obligatoire quand on passe un BytesIO (pas d'extension détectable)
-    xl = pd.ExcelFile(buf, engine='openpyxl')
+    xl = pd.ExcelFile(BytesIO(resp.content), engine='openpyxl')
 
     tb         = pd.read_excel(xl, sheet_name='Tirs & Buts par Match')
     disc       = pd.read_excel(xl, sheet_name='Discipline')
     arrets     = pd.read_excel(xl, sheet_name='Arrêts')
     ref_matchs = pd.read_excel(xl, sheet_name='RefMatchs')
 
-    # Numéro gardien depuis libellé
     arrets['Numéro'] = arrets['Gardiens'].apply(
         lambda g: 16 if 'Mai' in str(g) else (12 if 'Stephan' in str(g) else None)
     )
-    # Colonne arrêts : nom variable (peut avoir espace trailing)
-    col_arrets = [c for c in arrets.columns if 'Arr' in c and c != 'Numéro' and c != 'Gardiens' and c != 'Match' and c != 'Journée']
-    if col_arrets:
-        arrets.rename(columns={col_arrets[0]: 'Arrêts'}, inplace=True)
+    col_arr = [c for c in arrets.columns if 'Arr' in c
+               and c not in ('Numéro', 'Gardiens', 'Match', 'Journée')]
+    if col_arr:
+        arrets.rename(columns={col_arr[0]: 'Arrêts'}, inplace=True)
 
     disc['Numéro'] = disc['Joueurs'].str.extract(r'^(\d+)').astype(float)
     return tb, disc, arrets, ref_matchs
@@ -108,28 +118,39 @@ def kpi(val, label, cls=""):
             f'<div class="lbl">{label}</div></div>')
 
 
-def layout_plotly(fig, title, height=300, right=10):
+def sort_by_journee(df):
+    """Trie un df qui possède déjà une colonne Journée, sans merge."""
+    df = df.copy()
+    df['_j_order'] = df['Journée'].apply(
+        lambda j: JOURNEE_ORDER.index(str(j)) if str(j) in JOURNEE_ORDER else 99
+    )
+    df = df.sort_values('_j_order').drop(columns='_j_order')
+    df['label'] = df['Journée'].astype(str) + ' · ' + df['Match'].astype(str)
+    return df
+
+
+def chart_layout(fig, title, height=220, right=10):
     fig.update_layout(
-        title=title, title_font_size=13,
+        title=dict(text=title, font=dict(size=11)),
         plot_bgcolor='white', paper_bgcolor=C['bg'],
-        height=height, margin=dict(t=42, b=8, l=8, r=right),
-        font=dict(family='Inter'), legend=dict(orientation='h', y=1.14),
+        height=height, margin=dict(t=32, b=4, l=4, r=right),
+        font=dict(family='Inter', size=10),
+        legend=dict(orientation='h', y=1.18, font=dict(size=9)),
     )
     fig.update_yaxes(gridcolor='#e5e9f0')
+    fig.update_xaxes(tickfont=dict(size=8))
 
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("### 🤾 BHB – Fiches Joueurs")
-    st.markdown("---")
+    st.markdown("#### 🤾 BHB – Fiches Joueurs")
     joueurs_tri = REF_JOUEURS.sort_values('Nom')
     options = joueurs_tri.apply(
         lambda r: f"{r['Numéro']} – {r['Prénom']} {r['Nom']}", axis=1
     ).tolist()
-    sel = st.selectbox("Joueur", options)
+    sel     = st.selectbox("Joueur", options, label_visibility="collapsed")
     num_sel = int(sel.split("–")[0].strip())
 
-    st.markdown("---")
     st.markdown("**Filtres**")
     phases = ['Toutes'] + sorted(ref_matchs['Phase'].dropna().unique())
     lieux  = ['Tous']   + sorted(ref_matchs['Lieu'].dropna().unique())
@@ -140,59 +161,54 @@ with st.sidebar:
     if filtre_phase != 'Toutes': rm = rm[rm['Phase'] == filtre_phase]
     if filtre_lieu  != 'Tous':   rm = rm[rm['Lieu']  == filtre_lieu]
 
-    matchs_dispo = sorted(rm['Match'].unique())
-    sel_matchs   = st.multiselect("Matchs (vide = tous)", matchs_dispo, placeholder="Tous les matchs")
+    matchs_dispo  = sorted(rm['Match'].unique())
+    sel_matchs    = st.multiselect("Matchs", matchs_dispo, placeholder="Tous les matchs")
     matchs_actifs = sel_matchs if sel_matchs else matchs_dispo
-
-# ── Header ────────────────────────────────────────────────────────────────────
-jinfo = REF_JOUEURS[REF_JOUEURS['Numéro'] == num_sel].iloc[0]
-photo = load_photo(num_sel)
-
-c1, c2 = st.columns([1, 2.8])
-with c1:
-    if photo:
-        st.image(photo, width=130)
-    else:
-        st.markdown('<div style="width:110px;height:110px;border-radius:50%;background:#2d5a8e;'
-                    'display:flex;align-items:center;justify-content:center;font-size:2.2rem;'
-                    'border:3px solid #4A90D9">👤</div>', unsafe_allow_html=True)
-with c2:
-    st.markdown(f"""
-    <div style="padding-top:8px">
-      <div style="font-size:0.78rem;color:#888;text-transform:uppercase;letter-spacing:1px">Numéro {jinfo['Numéro']}</div>
-      <div style="font-size:1.75rem;font-weight:700;color:#1a2e4a;line-height:1.15">{jinfo['Prénom']} {jinfo['Nom']}</div>
-      <div style="font-size:0.92rem;color:#1F4E79;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-top:4px">{jinfo['Poste']}</div>
-    </div>""", unsafe_allow_html=True)
-
-st.markdown("<hr style='border:none;border-top:2px solid #1F4E79;margin:18px 0 16px'>", unsafe_allow_html=True)
-
-filtre_txt = []
-if filtre_phase != 'Toutes': filtre_txt.append(filtre_phase)
-if filtre_lieu  != 'Tous':   filtre_txt.append(filtre_lieu)
-if sel_matchs:               filtre_txt.append(f"{len(sel_matchs)} match(s)")
-if filtre_txt:
-    st.markdown(f'<span class="match-badge">🔎 {" · ".join(filtre_txt)}</span>', unsafe_allow_html=True)
 
 # ── Données filtrées ──────────────────────────────────────────────────────────
 tb_f     = tb[tb['Match'].isin(matchs_actifs)         & (tb['Numéro']     == num_sel)]
 disc_f   = disc[disc['Match'].isin(matchs_actifs)     & (disc['Numéro']   == num_sel)]
 arrets_f = arrets[arrets['Match'].isin(matchs_actifs) & (arrets['Numéro'] == num_sel)]
-
 matchs_joues = arrets_f['Match'].nunique() if num_sel in GARDIENS else disc_f['Match'].nunique()
 
-st.markdown(f"""
-<div class="stat-card">
-  <h3>📅 Général</h3>
-  <div class="kpi-row">{kpi(matchs_joues, "Matchs joués")}</div>
-</div>""", unsafe_allow_html=True)
+# ── Header : photo + infos + général (une ligne) ──────────────────────────────
+jinfo = REF_JOUEURS[REF_JOUEURS['Numéro'] == num_sel].iloc[0]
+photo = load_photo(num_sel)
 
-# helper : merge journée + tri chronologique
-def add_journee_label(df):
-    df = df.merge(ref_matchs[['Match', 'Journée']], on='Match', how='left')
-    df = df.sort_values('Journée')
-    df['label'] = df['Journée'].astype(str) + '<br>' + df['Match']
-    return df
+col_ph, col_info, col_gen = st.columns([1, 2.5, 4])
 
+with col_ph:
+    if photo:
+        st.image(photo, width=90)
+    else:
+        st.markdown('<div style="width:80px;height:80px;border-radius:50%;background:#2d5a8e;'
+                    'display:flex;align-items:center;justify-content:center;font-size:1.8rem;'
+                    'border:2px solid #4A90D9">👤</div>', unsafe_allow_html=True)
+
+with col_info:
+    st.markdown(f"""
+    <div style="padding-top:6px">
+      <div class="player-num">N° {jinfo['Numéro']}</div>
+      <div class="player-name">{jinfo['Prénom']} {jinfo['Nom']}</div>
+      <div class="player-poste">{jinfo['Poste']}</div>
+    </div>""", unsafe_allow_html=True)
+
+with col_gen:
+    filtre_txt = []
+    if filtre_phase != 'Toutes': filtre_txt.append(filtre_phase)
+    if filtre_lieu  != 'Tous':   filtre_txt.append(filtre_lieu)
+    if sel_matchs:               filtre_txt.append(f"{len(sel_matchs)} match(s)")
+    badge = f'<span class="match-badge">🔎 {" · ".join(filtre_txt)}</span>' if filtre_txt else ""
+    st.markdown(f"""
+    <div style="padding-top:14px">
+      {badge}
+      <div class="stat-card" style="margin-top:4px">
+        <h3>📅 Général</h3>
+        <div class="kpi-row">{kpi(matchs_joues, "Matchs joués")}</div>
+      </div>
+    </div>""", unsafe_allow_html=True)
+
+st.markdown('<hr class="divider">', unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════
 # GARDIENS
@@ -211,119 +227,132 @@ if num_sel in GARDIENS:
     </div>""", unsafe_allow_html=True)
 
     if not arrets_f.empty:
-        df_plot = add_journee_label(arrets_f.copy())
+        df_plot = sort_by_journee(arrets_f)
         fig = go.Figure()
         fig.add_trace(go.Bar(
             x=df_plot['label'], y=df_plot['Arrêts'],
             marker_color=C['accent'],
             text=df_plot['Arrêts'].astype(int), textposition='outside',
+            textfont=dict(size=9),
             hovertemplate='%{x}<br>Arrêts : %{y}<extra></extra>',
         ))
         fig.add_hline(y=moy_arrets, line_dash='dot', line_color=C['orange'],
-                      annotation_text=f"Moy {moy_arrets}", annotation_position="top left")
-        layout_plotly(fig, "Arrêts par match")
+                      annotation_text=f"Moy {moy_arrets}",
+                      annotation_position="top left",
+                      annotation_font_size=9)
+        chart_layout(fig, "Arrêts par match", height=230)
         fig.update_layout(showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
 
 # ══════════════════════════════════════════════════════════
-# JOUEURS DE CHAMP
+# JOUEURS DE CHAMP  —  2 colonnes côte à côte
 # ══════════════════════════════════════════════════════════
 else:
-    # ── Discipline ────────────────────────────────────────
-    total_2mn   = int(disc_f['2mn'].sum()) if not disc_f.empty else 0
-    total_rouge = int(disc_f['Dis'].sum()) if not disc_f.empty else 0
+    total_2mn   = int(disc_f['2mn'].fillna(0).sum()) if not disc_f.empty else 0
+    total_rouge = int(disc_f['Dis'].fillna(0).sum()) if not disc_f.empty else 0
+    total_tirs  = int(tb_f['Tirs'].sum())
+    total_buts  = int(tb_f['Buts'].sum())
+    eff_pct     = round(total_buts / total_tirs * 100, 1) if total_tirs > 0 else 0
+    efficacite  = f"{eff_pct}%" if total_tirs > 0 else "—"
+    moy_buts    = round(total_buts / matchs_joues, 1) if matchs_joues > 0 else 0
 
-    st.markdown(f"""
-    <div class="stat-card">
-      <h3>🟨 Discipline</h3>
-      <div class="kpi-row">
-        {kpi(total_2mn,   "Exclusions 2 mn", "orange")}
-        {kpi(total_rouge, "Cartons rouges",   "red")}
-      </div>
-    </div>""", unsafe_allow_html=True)
+    col_d, col_a = st.columns(2)
 
-    if not disc_f.empty and (total_2mn > 0 or total_rouge > 0):
-        df_disc = add_journee_label(disc_f.copy())
-        df_disc['2mn'] = df_disc['2mn'].fillna(0).astype(int)
-        df_disc['Dis'] = df_disc['Dis'].fillna(0).astype(int)
-        df_agg = df_disc.groupby('label', sort=False).agg(
-            excl=('2mn', 'sum'), rouge=('Dis', 'sum')
-        ).reset_index()
+    # ── Colonne Discipline ────────────────────────────────
+    with col_d:
+        st.markdown(f"""
+        <div class="stat-card">
+          <h3>🟨 Discipline</h3>
+          <div class="kpi-row">
+            {kpi(total_2mn,   "Excl. 2 mn", "orange")}
+            {kpi(total_rouge, "Cartons rouges", "red")}
+          </div>
+        </div>""", unsafe_allow_html=True)
 
-        fig_d = go.Figure()
-        fig_d.add_trace(go.Bar(
-            name='2 mn', x=df_agg['label'], y=df_agg['excl'],
-            marker_color=C['orange'], text=df_agg['excl'], textposition='outside',
-            hovertemplate='%{x}<br>Exclusions 2mn : %{y}<extra></extra>',
-        ))
-        if df_agg['rouge'].sum() > 0:
+        if not disc_f.empty and (total_2mn > 0 or total_rouge > 0):
+            df_disc = sort_by_journee(disc_f)
+            df_disc['2mn'] = df_disc['2mn'].fillna(0).astype(int)
+            df_disc['Dis'] = df_disc['Dis'].fillna(0).astype(int)
+            df_agg = df_disc.groupby('label', sort=False).agg(
+                excl=('2mn', 'sum'), rouge=('Dis', 'sum')
+            ).reset_index()
+
+            fig_d = go.Figure()
             fig_d.add_trace(go.Bar(
-                name='Rouge', x=df_agg['label'], y=df_agg['rouge'],
-                marker_color=C['red'], text=df_agg['rouge'], textposition='outside',
-                hovertemplate='%{x}<br>Carton rouge : %{y}<extra></extra>',
+                name='2 mn', x=df_agg['label'], y=df_agg['excl'],
+                marker_color=C['orange'],
+                text=df_agg['excl'], textposition='outside', textfont=dict(size=9),
+                hovertemplate='%{x}<br>2mn : %{y}<extra></extra>',
             ))
-        layout_plotly(fig_d, "Discipline par match", height=280)
-        fig_d.update_layout(barmode='stack')
-        fig_d.update_yaxes(dtick=1)
-        st.plotly_chart(fig_d, use_container_width=True)
+            if df_agg['rouge'].sum() > 0:
+                fig_d.add_trace(go.Bar(
+                    name='Rouge', x=df_agg['label'], y=df_agg['rouge'],
+                    marker_color=C['red'],
+                    text=df_agg['rouge'], textposition='outside', textfont=dict(size=9),
+                    hovertemplate='%{x}<br>Rouge : %{y}<extra></extra>',
+                ))
+            chart_layout(fig_d, "Discipline par match", height=230)
+            fig_d.update_layout(barmode='stack')
+            fig_d.update_yaxes(dtick=1)
+            st.plotly_chart(fig_d, use_container_width=True)
+        else:
+            st.markdown('<div style="color:#aaa;font-size:0.8rem;padding:8px">Aucune sanction sur cette sélection.</div>',
+                        unsafe_allow_html=True)
 
-    # ── Attaque ───────────────────────────────────────────
-    total_tirs = int(tb_f['Tirs'].sum())
-    total_buts = int(tb_f['Buts'].sum())
-    eff_pct    = round(total_buts / total_tirs * 100, 1) if total_tirs > 0 else 0
-    efficacite = f"{eff_pct}%" if total_tirs > 0 else "—"
-    moy_buts   = round(total_buts / matchs_joues, 1) if matchs_joues > 0 else 0
+    # ── Colonne Attaque ───────────────────────────────────
+    with col_a:
+        st.markdown(f"""
+        <div class="stat-card">
+          <h3>🎯 Attaque</h3>
+          <div class="kpi-row">
+            {kpi(total_tirs,  "Tirs")}
+            {kpi(total_buts,  "Buts",     "green")}
+            {kpi(efficacite,  "Efficacité","green")}
+            {kpi(moy_buts,    "Buts/match")}
+          </div>
+        </div>""", unsafe_allow_html=True)
 
-    st.markdown(f"""
-    <div class="stat-card">
-      <h3>🎯 Attaque</h3>
-      <div class="kpi-row">
-        {kpi(total_tirs,  "Tirs")}
-        {kpi(total_buts,  "Buts",           "green")}
-        {kpi(efficacite,  "Efficacité tir",  "green")}
-        {kpi(moy_buts,    "Buts / match")}
-      </div>
-    </div>""", unsafe_allow_html=True)
+        if not tb_f.empty:
+            df_tb = sort_by_journee(tb_f)
+            df_tb['Manqués'] = df_tb['Tirs'] - df_tb['Buts']
+            df_tb['Eff%']    = (df_tb['Buts'] / df_tb['Tirs'] * 100).round(1)
 
+            fig_att = go.Figure()
+            fig_att.add_trace(go.Bar(
+                name='Buts', x=df_tb['label'], y=df_tb['Buts'],
+                marker_color=C['green'],
+                text=df_tb['Buts'], textposition='inside',
+                textfont=dict(color='white', size=9),
+                hovertemplate='%{x}<br>Buts : %{y}<extra></extra>',
+            ))
+            fig_att.add_trace(go.Bar(
+                name='Manqués', x=df_tb['label'], y=df_tb['Manqués'],
+                marker_color='#c8d8e8',
+                hovertemplate='%{x}<br>Manqués : %{y}<extra></extra>',
+            ))
+            fig_att.add_trace(go.Scatter(
+                name='Eff %', x=df_tb['label'], y=df_tb['Eff%'],
+                mode='lines+markers',
+                line=dict(color=C['orange'], width=1.5),
+                marker=dict(size=4), yaxis='y2',
+                hovertemplate='%{x}<br>Eff : %{y}%<extra></extra>',
+            ))
+            chart_layout(fig_att, "Tirs & Buts par match", height=230, right=40)
+            fig_att.update_layout(
+                barmode='stack',
+                yaxis=dict(title=None, gridcolor='#e5e9f0'),
+                yaxis2=dict(overlaying='y', side='right', range=[0, 115],
+                            showgrid=False, ticksuffix='%', tickfont=dict(size=8)),
+            )
+            st.plotly_chart(fig_att, use_container_width=True)
+
+    # ── Gauge pleine largeur ──────────────────────────────
     if not tb_f.empty:
-        df_tb = add_journee_label(tb_f.copy())
-        df_tb['Manqués'] = df_tb['Tirs'] - df_tb['Buts']
-        df_tb['Eff%']    = (df_tb['Buts'] / df_tb['Tirs'] * 100).round(1)
-
-        # Barres empilées Buts / Manqués + ligne efficacité (axe 2)
-        fig_att = go.Figure()
-        fig_att.add_trace(go.Bar(
-            name='Buts', x=df_tb['label'], y=df_tb['Buts'],
-            marker_color=C['green'],
-            text=df_tb['Buts'], textposition='inside', textfont_color='white',
-            hovertemplate='%{x}<br>Buts : %{y}<extra></extra>',
-        ))
-        fig_att.add_trace(go.Bar(
-            name='Tirs manqués', x=df_tb['label'], y=df_tb['Manqués'],
-            marker_color='#c8d8e8',
-            hovertemplate='%{x}<br>Manqués : %{y}<extra></extra>',
-        ))
-        fig_att.add_trace(go.Scatter(
-            name='Efficacité %', x=df_tb['label'], y=df_tb['Eff%'],
-            mode='lines+markers', line=dict(color=C['orange'], width=2),
-            marker=dict(size=6), yaxis='y2',
-            hovertemplate='%{x}<br>Efficacité : %{y}%<extra></extra>',
-        ))
-        layout_plotly(fig_att, "Tirs & Buts par match", height=320, right=50)
-        fig_att.update_layout(
-            barmode='stack',
-            yaxis=dict(title='Tirs', gridcolor='#e5e9f0'),
-            yaxis2=dict(title='Efficacité %', overlaying='y', side='right',
-                        range=[0, 115], showgrid=False, ticksuffix='%'),
-        )
-        st.plotly_chart(fig_att, use_container_width=True)
-
-        # Gauge efficacité globale
         fig_g = go.Figure(go.Indicator(
             mode="gauge+number",
             value=eff_pct,
-            number={'suffix': '%', 'font': {'size': 30, 'color': C['primary']}},
-            title={'text': "Efficacité globale au tir", 'font': {'size': 13}},
+            number={'suffix': '%', 'font': {'size': 24, 'color': C['primary']}},
+            title={'text': "Efficacité globale au tir", 'font': {'size': 11}},
             gauge={
                 'axis': {'range': [0, 100], 'tickwidth': 1},
                 'bar': {'color': C['green']},
@@ -338,10 +367,10 @@ else:
             }
         ))
         fig_g.update_layout(
-            height=210, margin=dict(t=30, b=8, l=30, r=30),
+            height=160, margin=dict(t=20, b=4, l=60, r=60),
             paper_bgcolor=C['bg'], font=dict(family='Inter'),
         )
         st.plotly_chart(fig_g, use_container_width=True)
 
-st.markdown("<br><div style='text-align:center;color:#aaa;font-size:0.75rem'>"
+st.markdown("<div style='text-align:center;color:#ccc;font-size:0.68rem;margin-top:4px'>"
             "BHB Analytics · Saison 2025–2026</div>", unsafe_allow_html=True)
