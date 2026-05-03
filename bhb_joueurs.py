@@ -249,14 +249,15 @@ def make_label(df):
 
 
 def plotly_cfg(height=210, r=8):
-    """Config layout commune + désactivation zoom/pan."""
+    """Config layout commune. Ne contient PAS yaxis — toujours passé
+    explicitement dans update_layout() pour éviter 'multiple values for
+    keyword argument yaxis'."""
     return dict(
         plot_bgcolor=C['white'], paper_bgcolor=C['offwhite'],
         height=height, margin=dict(t=32, b=4, l=4, r=r),
         font=dict(family='Inter', size=10, color=C['text']),
         legend=dict(orientation='h', y=1.16, font_size=9),
-        xaxis=dict(tickfont_size=8, fixedrange=True),   # désactive zoom X
-        yaxis=dict(fixedrange=True),                    # désactive zoom Y
+        xaxis=dict(tickfont_size=8, fixedrange=True),
         dragmode=False,
     )
 
@@ -419,11 +420,12 @@ with col_charts:
             fig.add_hline(y=moy_v, line_dash='dot', line_color=C['orange'],
                           annotation_text=f"Moy {moy_v}",
                           annotation_font_size=9, annotation_position="top left")
+            cfg = plotly_cfg(height=430)
             fig.update_layout(
                 title=dict(text="Arrêts par match", font_size=11),
                 showlegend=False,
                 yaxis=dict(fixedrange=True, gridcolor=C['gray'], title=None),
-                **plotly_cfg(height=430),
+                **cfg,
             )
             st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
@@ -457,15 +459,15 @@ with col_charts:
                 hovertemplate='%{x}<br>Efficacité : %{y}%<extra></extra>',
             ))
             cfg_att = plotly_cfg(height=235, r=42)
-            cfg_att['yaxis2'] = dict(
-                title=None, overlaying='y', side='right',
-                range=[0, 115], showgrid=False, ticksuffix='%',
-                tickfont_size=8, fixedrange=True,
-            )
             fig_att.update_layout(
                 title=dict(text="🎯 Tirs & Buts par match", font_size=11),
                 barmode='stack',
                 yaxis=dict(fixedrange=True, gridcolor=C['gray'], title=None),
+                yaxis2=dict(
+                    title=None, overlaying='y', side='right',
+                    range=[0, 115], showgrid=False, ticksuffix='%',
+                    tickfont_size=8, fixedrange=True,
+                ),
                 **cfg_att,
             )
             st.plotly_chart(fig_att, use_container_width=True, config={'displayModeBar': False})
@@ -520,11 +522,12 @@ with col_charts:
                         marker_color=C['red'],
                         text=df_agg['rouge'], textposition='outside', textfont_size=8,
                     ))
+                cfg_d = plotly_cfg(height=185)
                 fig_d.update_layout(
                     title=dict(text="🟨 Discipline par match", font_size=11),
                     barmode='stack',
                     yaxis=dict(fixedrange=True, gridcolor=C['gray'], dtick=1, title=None),
-                    **plotly_cfg(height=185),
+                    **cfg_d,
                 )
                 st.plotly_chart(fig_d, use_container_width=True, config={'displayModeBar': False})
             else:
