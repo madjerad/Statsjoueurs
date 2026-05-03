@@ -38,7 +38,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-GITHUB_RAW  = "https://raw.githubusercontent.com/madjerad/dma/main"
+GITHUB_RAW  = "https://raw.githubusercontent.com/madjerad/Statsjoueurs/main"
 DATA_URL    = f"{GITHUB_RAW}/StatsJoueurs2526.xlsx"
 PHOTOS_BASE = f"{GITHUB_RAW}/Photos"
 GARDIENS    = {12, 16}
