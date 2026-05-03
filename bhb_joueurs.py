@@ -37,7 +37,9 @@ _CSS = (
     "@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');"
     ":root{color-scheme:light only!important}"
     "html,body,[data-testid='stApp']{font-family:'Inter',sans-serif!important;background-color:#f4f6fb!important;color:#1a2744!important}"
-    ".block-container{padding:0.6rem 1rem 0.4rem!important}"
+    ".block-container{padding:3.5rem 1rem 0.4rem!important}"
+    "[data-testid='stToolbar']{display:none!important}"
+    "[data-testid='stHeader']{background:transparent!important;height:0!important}"
     "section[data-testid='stSidebar']{background:#1a2744!important;min-width:220px!important;max-width:220px!important}"
     "section[data-testid='stSidebar'] *{color:#fff!important}"
     "section[data-testid='stSidebar'] .stSelectbox>div>div,"
@@ -184,7 +186,7 @@ def plotly_cfg(height=210, r=8):
     return dict(
         plot_bgcolor=C['white'], paper_bgcolor=C['offwhite'],
         height=height, margin=dict(t=32, b=4, l=4, r=r),
-        font=dict(family='Inter', size=10, color=C['text']),
+        font=dict(family='Inter', size=10, color='#1a2744'),
         legend=dict(orientation='h', y=1.16, font_size=9),
         xaxis=dict(tickfont_size=8, fixedrange=True),
         dragmode=False,
@@ -343,7 +345,7 @@ with col_charts:
                 y=df_plot['Arrêts'],
                 marker_color=C['blue2'],
                 text=safe_int_series(df_plot['Arrêts']),
-                textposition='outside', textfont_size=9,
+                textposition='outside', textfont_size=9, textfont_color='#1a2744',
                 hovertemplate='%{x}<br>Arrêts : %{y}<extra></extra>',
             ))
             fig.add_hline(y=moy_v, line_dash='dot', line_color=C['orange'],
@@ -443,13 +445,13 @@ with col_charts:
                 fig_d.add_trace(go.Bar(
                     name='2 mn', x=df_agg['label'], y=df_agg['excl'],
                     marker_color=C['orange'],
-                    text=df_agg['excl'], textposition='outside', textfont_size=8,
+                    text=df_agg['excl'], textposition='outside', textfont_size=8, textfont_color='#1a2744',
                 ))
                 if df_agg['rouge'].sum() > 0:
                     fig_d.add_trace(go.Bar(
                         name='Rouge', x=df_agg['label'], y=df_agg['rouge'],
                         marker_color=C['red'],
-                        text=df_agg['rouge'], textposition='outside', textfont_size=8,
+                        text=df_agg['rouge'], textposition='outside', textfont_size=8, textfont_color='#1a2744',
                     ))
                 cfg_d = plotly_cfg(height=185)
                 fig_d.update_layout(
